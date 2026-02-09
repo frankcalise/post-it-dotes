@@ -67,10 +67,41 @@ No API key needed. Rate limited to ~60 requests/min.
 
 ## Deployment
 
-Configured for Netlify with SPA redirect. Just connect the repo and deploy:
+Configured for Netlify as a static SPA with client-side routing redirect.
+
+### First-time setup
+
+1. Install the Netlify CLI and log in:
+   ```bash
+   bun add -g netlify-cli
+   netlify login
+   ```
+
+2. Build the project:
+   ```bash
+   bun run build
+   ```
+
+3. Deploy — you'll be prompted to create a new site:
+   ```bash
+   netlify deploy --prod --dir=dist
+   ```
+
+4. Set environment variables in the Netlify dashboard under **Site settings > Environment variables**:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+
+5. Update auth redirect URLs:
+   - **Discord Developer Portal:** Add your Netlify URL (e.g. `https://your-site.netlify.app`) as an OAuth2 redirect
+   - **Supabase Auth settings:** Add the Netlify URL to **Site URL** and **Redirect URLs**
+
+6. Redeploy so the env vars take effect:
+   ```bash
+   bun run build && netlify deploy --prod --dir=dist
+   ```
+
+### Subsequent deploys
 
 ```bash
-bun run build
+bun run build && netlify deploy --prod --dir=dist
 ```
-
-Build output goes to `dist/`.
