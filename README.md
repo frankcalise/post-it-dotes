@@ -4,58 +4,73 @@ A shared Dota 2 player scouting platform for small friend groups. Track players 
 
 ## What It Does
 
-**Before/during a match:** Search for a player by name. If they're someone you've played with before, instantly see notes your group has left, their most-played heroes, and tags like "skilled," "toxic," or "trustworthy."
+**Before/during a match:** Paste the in-game `status` console output. The app parses all 10 players, identifies your group members, and lets you tag and annotate opponents in real-time.
 
-**After a match:** Drop in a Match ID. The app pulls all 10 players with their permanent Steam IDs, sorted by team. Leave notes, tag players, and move on. Name changes don't matter — the app tracks players by Steam ID, so "xXx_Shadow_xXx" renaming to "John" won't lose your history.
+**After a match:** Fetch enriched data from OpenDota — hero picks, KDA, Steam IDs. Name changes don't matter — the app tracks players by Steam ID, so aliases won't lose your history.
 
-**Ban Board:** Paste in enemy player names before a match. For known players, the app suggests which heroes your party should ban based on their most-played heroes and Turbo winrates. Prioritizes heroes that multiple enemies share.
+**Shared database:** Everything is shared across all members. One person leaves a note, everyone sees it instantly via Supabase Realtime.
 
-**Shared database:** Everything is shared across all members. One person leaves a note, everyone sees it.
+## Tech Stack
 
-## Planned Tech Stack
+- **Frontend:** Vite + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
+- **Backend/DB:** Supabase (Postgres, Discord OAuth, Realtime)
+- **Package Manager:** Bun
+- **Hosting:** Netlify (SPA)
+- **Data Source:** [OpenDota API](https://docs.opendota.com/) (free, no auth required)
 
-- **Frontend:** Next.js (React)
-- **Backend/DB:** Supabase (Auth, Postgres, real-time sync)
-- **Hosting:** Vercel
-- **Data Source:** [OpenDota API](https://docs.opendota.com/) (free, no auth required for basic queries)
+## Getting Started
 
-## Data Model
+1. Clone the repo and install dependencies:
+   ```bash
+   bun install
+   ```
 
-### Players
-- Steam ID (unique, permanent identifier)
-- Known names (array of all aliases seen)
-- Top heroes (cached from OpenDota, with games played and winrates)
+2. Copy `.env.example` to `.env` and fill in your Supabase credentials:
+   ```bash
+   cp .env.example .env
+   ```
 
-### Notes
-- Linked to a player and an author
-- Free-text content
-- Tags (e.g. `skilled`, `toxic`, `trustworthy`)
-- Optional Match ID for context
+3. Run the SQL migration in your Supabase dashboard:
+   - Open `supabase/migrations/001_initial_schema.sql`
+   - Paste into the Supabase SQL Editor and run
 
-### Matches (optional)
-- Cached OpenDota match data (all 10 players, teams, hero picks)
+4. Configure Discord OAuth in Supabase:
+   - Create a Discord application at the Discord Developer Portal
+   - Add OAuth2 redirect URL: `https://your-project.supabase.co/auth/v1/callback`
+   - Add Discord provider in Supabase Auth settings
 
-## Key Workflows
+5. Start the dev server:
+   ```bash
+   bun dev
+   ```
 
-1. **Post-match import** — Enter a Match ID, fetch all players via OpenDota, review and annotate
-2. **Name search** — Fuzzy search against known aliases in your database
-3. **Ban recommendations** — Aggregate top heroes across identified enemies, rank by threat
-4. **Player merge** — If a name-only entry later matches a Steam ID from a match import, merge records
+## Keyboard Shortcuts
+
+| Key | Action | Scope |
+|-----|--------|-------|
+| `N` | Open new game dialog | Global |
+| `I` | Navigate up in player list | Match view |
+| `K` | Navigate down in player list | Match view |
+| `E` | Edit selected player (inline notes) | Match view |
+| `T` | Open tag picker for selected player | Match view |
+| `Esc` | Close dialog / exit edit mode | Global |
 
 ## OpenDota API Endpoints Used
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/matches/{match_id}` | Full match data with all player account IDs and team slots |
-| `GET /api/players/{account_id}` | Player profile and recent names |
+| `GET /api/matches/{match_id}` | Full match data with all player account IDs |
 | `GET /api/players/{account_id}/heroes?game_mode=23` | Top heroes filtered to Turbo mode |
-| `GET /api/heroes` | Static hero ID-to-name mapping (cache once) |
+| `GET /api/heroes` | Static hero ID-to-name mapping (cached locally) |
 
-No API key needed. Rate limited to 60 requests/min (plenty for this use case).
+No API key needed. Rate limited to ~60 requests/min.
 
-## Future Ideas
+## Deployment
 
-- Tag-based color coding (green = trusted, red = avoid)
-- Frequency tracking ("you've played against this person 7 times")
-- Private vs. shared notes
-- Browser extension overlay for Dotabuff/OpenDota pages
+Configured for Netlify with SPA redirect. Just connect the repo and deploy:
+
+```bash
+bun run build
+```
+
+Build output goes to `dist/`.
