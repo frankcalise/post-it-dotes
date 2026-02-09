@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { toast } from "sonner"
 import type { Match, MatchPlayerWithDetails } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,10 +10,11 @@ import { OpenDotaFetchButton } from "./opendota-fetch-button"
 type MatchViewProps = {
   match: Match
   matchPlayers: MatchPlayerWithDetails[]
+  setMatchPlayers: React.Dispatch<React.SetStateAction<MatchPlayerWithDetails[]>>
   onRefetch: () => void
 }
 
-export function MatchView({ match, matchPlayers, onRefetch }: MatchViewProps) {
+export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: MatchViewProps) {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const [appUserSlots, setAppUserSlots] = useState<Set<number>>(new Set())
 
@@ -48,6 +50,53 @@ export function MatchView({ match, matchPlayers, onRefetch }: MatchViewProps) {
       console.error("Error identifying app users:", error)
     }
   }
+
+  const movePlayerToTeam = useCallback(
+    async (targetTeam: 1 | 2) => {
+      if (selectedSlot === null) return
+      const player = matchPlayers.find((p) => p.slot === selectedSlot)
+      if (!player || player.team === targetTeam) return
+
+      // Optimistic update
+      setMatchPlayers((prev) =>
+        prev.map((p) => (p.slot === selectedSlot ? { ...p, team: targetTeam } : p))
+      )
+
+      try {
+        const { error } = await supabase
+          .from("match_players")
+          .update({ team: targetTeam })
+          .eq("id", player.id)
+
+        if (error) throw error
+      } catch (err) {
+        toast.error("Failed to move player")
+        console.error(err)
+        onRefetch()
+      }
+    },
+    [selectedSlot, matchPlayers, setMatchPlayers, onRefetch]
+  )
+
+  useEffect(() => {
+    function handleKeyPress(e: KeyboardEvent) {
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) return
+
+      if (e.key === "1") {
+        e.preventDefault()
+        movePlayerToTeam(1)
+      } else if (e.key === "2") {
+        e.preventDefault()
+        movePlayerToTeam(2)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [movePlayerToTeam])
 
   const team1Players = matchPlayers.filter((p) => p.team === 1)
   const team2Players = matchPlayers.filter((p) => p.team === 2)

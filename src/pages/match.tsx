@@ -4,7 +4,7 @@ import { MatchView } from "@/components/match/match-view"
 
 export default function MatchPage() {
   const { id } = useParams<{ id: string }>()
-  const { match, matchPlayers, loading, error } = useMatch(id)
+  const { match, matchPlayers, setMatchPlayers, loading, error, refetch } = useMatch(id)
 
   if (loading) {
     return (
@@ -38,7 +38,8 @@ export default function MatchPage() {
       <MatchView
         match={match}
         matchPlayers={matchPlayers}
-        onRefetch={() => window.location.reload()}
+        setMatchPlayers={setMatchPlayers}
+        onRefetch={refetch}
       />
     </div>
   )

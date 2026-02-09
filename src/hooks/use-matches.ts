@@ -87,9 +87,9 @@ export function useMatch(id: string | undefined) {
     fetchMatch(id)
   }, [id])
 
-  async function fetchMatch(matchId: string) {
+  async function fetchMatch(matchId: string, silent = false) {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
 
       // Fetch match
       const { data: matchData, error: matchError } = await supabase
@@ -131,7 +131,11 @@ export function useMatch(id: string | undefined) {
     }
   }
 
-  return { match, matchPlayers, loading, error }
+  const refetch = useCallback(() => {
+    if (id) fetchMatch(id, true)
+  }, [id])
+
+  return { match, matchPlayers, setMatchPlayers, loading, error, refetch }
 }
 
 export function useCreateMatch() {
@@ -203,13 +207,13 @@ export function useCreateMatch() {
             playerId = newPlayer.id
           }
 
-          // Create match_player entry (team is a generated column from slot)
           const { error: matchPlayerError } = await supabase
             .from("match_players")
             .insert({
               match_id: match.id,
               player_id: playerId,
               slot: parsedPlayer.slot,
+              team: parsedPlayer.team,
               display_name: parsedPlayer.name,
             })
 
