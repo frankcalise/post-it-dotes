@@ -47,7 +47,40 @@ export function useTags() {
     }
   }, [])
 
-  return { tags, loading, error, refetch: fetchTags, createTag }
+  const updateTag = useCallback(async (id: string, updates: { name?: string; color?: string }) => {
+    try {
+      const { data, error } = await supabase
+        .from("tags")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (error) throw error
+      setTags((prev) => prev.map((t) => (t.id === id ? data : t)))
+      return data
+    } catch (err) {
+      console.error("Error updating tag:", err)
+      throw err
+    }
+  }, [])
+
+  const deleteTag = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("tags")
+        .delete()
+        .eq("id", id)
+
+      if (error) throw error
+      setTags((prev) => prev.filter((t) => t.id !== id))
+    } catch (err) {
+      console.error("Error deleting tag:", err)
+      throw err
+    }
+  }, [])
+
+  return { tags, loading, error, refetch: fetchTags, createTag, updateTag, deleteTag }
 }
 
 export function usePlayerTags(playerId: string) {

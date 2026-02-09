@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "sonner"
 import type { Match, MatchPlayerWithDetails } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TeamPanel } from "./team-panel"
 import { OpenDotaFetchButton } from "./opendota-fetch-button"
+import { TagPickerDialog } from "@/components/tags/tag-picker"
 
 type MatchViewProps = {
   match: Match
@@ -17,6 +18,12 @@ type MatchViewProps = {
 export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: MatchViewProps) {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const [appUserSlots, setAppUserSlots] = useState<Set<number>>(new Set())
+  const [tagPickerOpen, setTagPickerOpen] = useState(false)
+
+  const selectedPlayer = useMemo(
+    () => matchPlayers.find((p) => p.slot === selectedSlot),
+    [selectedSlot, matchPlayers]
+  )
 
   useEffect(() => {
     identifyAppUsers()
@@ -78,12 +85,18 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
     [selectedSlot, matchPlayers, setMatchPlayers, onRefetch]
   )
 
+  const handleTagPickerClose = useCallback(
+    (open: boolean) => {
+      setTagPickerOpen(open)
+      if (!open) onRefetch()
+    },
+    [onRefetch]
+  )
+
   useEffect(() => {
     function handleKeyPress(e: KeyboardEvent) {
-      if (
-        document.activeElement?.tagName === "INPUT" ||
-        document.activeElement?.tagName === "TEXTAREA"
-      ) return
+      const tag = document.activeElement?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
 
       if (e.key === "1") {
         e.preventDefault()
@@ -91,12 +104,15 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
       } else if (e.key === "2") {
         e.preventDefault()
         movePlayerToTeam(2)
+      } else if ((e.key === "t" || e.key === "T") && selectedPlayer) {
+        e.preventDefault()
+        setTagPickerOpen(true)
       }
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [movePlayerToTeam])
+  }, [movePlayerToTeam, selectedPlayer])
 
   const team1Players = matchPlayers.filter((p) => p.team === 1)
   const team2Players = matchPlayers.filter((p) => p.team === 2)
@@ -172,6 +188,14 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           appUserSlots={appUserSlots}
         />
       </div>
+
+      {selectedPlayer && (
+        <TagPickerDialog
+          playerId={selectedPlayer.player.id}
+          open={tagPickerOpen}
+          onOpenChange={handleTagPickerClose}
+        />
+      )}
     </div>
   )
 }

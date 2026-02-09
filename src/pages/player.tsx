@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react"
 import { useParams, Link } from "react-router-dom"
 import { usePlayer } from "@/hooks/use-players"
 import { useHeroes } from "@/hooks/use-heroes"
@@ -13,6 +14,22 @@ export default function PlayerPage() {
   const { id } = useParams<{ id: string }>()
   const { player, loading, error } = usePlayer(id)
   const { getHeroName } = useHeroes()
+  const [tagDialogOpen, setTagDialogOpen] = useState(false)
+
+  useEffect(() => {
+    function handleKeyPress(e: KeyboardEvent) {
+      const tag = document.activeElement?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+
+      if ((e.key === "t" || e.key === "T") && id) {
+        e.preventDefault()
+        setTagDialogOpen(true)
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyPress)
+    return () => window.removeEventListener("keydown", handleKeyPress)
+  }, [id])
 
   if (loading) {
     return (
@@ -92,7 +109,11 @@ export default function PlayerPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-6">
-          <PlayerTags playerId={player.id} />
+          <PlayerTags
+            playerId={player.id}
+            dialogOpen={tagDialogOpen}
+            onDialogOpenChange={setTagDialogOpen}
+          />
         </Card>
 
         <Card className="p-6">
