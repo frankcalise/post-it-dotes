@@ -9,6 +9,7 @@ export type AuthContextValue = {
   loading: boolean
   signInWithDiscord: () => Promise<void>
   signOut: () => Promise<void>
+  updateProfile: (updates: Partial<Pick<Profile, "dota_names" | "steam_account_id">>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -19,23 +20,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchOrCreateProfile(session.user.id)
-      } else {
-        setLoading(false)
-      }
-    })
-
-    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+
       if (session?.user) {
-        await fetchOrCreateProfile(session.user.id)
+        // Must not await Supabase calls inside onAuthStateChange — it
+        // deadlocks when a token refresh is in flight. Fire-and-forget.
+        fetchOrCreateProfile(session.user)
       } else {
         setProfile(null)
         setLoading(false)
@@ -47,23 +40,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  async function fetchOrCreateProfile(userId: string) {
+  async function fetchOrCreateProfile(authUser: User) {
+    const meta = authUser.user_metadata
+    const discordUsername = meta?.name ?? meta?.preferred_username ?? null
+    const displayName = meta?.full_name ?? meta?.custom_claims?.global_name ?? null
+
     try {
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", userId)
+        .eq("id", authUser.id)
         .single()
 
       if (error) {
         if (error.code === "PGRST116") {
-          // Profile doesn't exist, create it
           const { data: newProfile, error: insertError } = await supabase
             .from("profiles")
             .insert({
-              id: userId,
-              discord_username: null,
-              display_name: null,
+              id: authUser.id,
+              discord_username: discordUsername,
+              display_name: displayName,
               dota_names: [],
               steam_account_id: null,
             })
@@ -76,13 +72,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw error
         }
       } else {
-        setProfile(data)
+        // Sync Discord metadata on each login in case it changed
+        if (data.discord_username !== discordUsername || data.display_name !== displayName) {
+          const { data: updated, error: updateError } = await supabase
+            .from("profiles")
+            .update({ discord_username: discordUsername, display_name: displayName })
+            .eq("id", authUser.id)
+            .select()
+            .single()
+
+          if (updateError) throw updateError
+          setProfile(updated)
+        } else {
+          setProfile(data)
+        }
       }
     } catch (error) {
       console.error("Error fetching/creating profile:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function updateProfile(updates: Partial<Pick<Profile, "dota_names" | "steam_account_id">>) {
+    if (!user) throw new Error("Not authenticated")
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", user.id)
+      .select()
+      .single()
+
+    if (error) throw error
+    setProfile(data)
   }
 
   async function signInWithDiscord() {
@@ -105,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signInWithDiscord, signOut }}
+      value={{ user, profile, loading, signInWithDiscord, signOut, updateProfile }}
     >
       {children}
     </AuthContext.Provider>
