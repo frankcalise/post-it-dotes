@@ -33,6 +33,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
   } | null>(null)
   const [appUsers, setAppUsers] = useState<Map<number, string>>(new Map())
   const [ourTeamSlot, setOurTeamSlot] = useState<1 | 2 | null>(null)
+  const [existingMatchId, setExistingMatchId] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -40,6 +41,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
       setParsed(null)
       setOurTeamSlot(null)
       setAppUsers(new Map())
+      setExistingMatchId(null)
     }
   }, [open])
 
@@ -51,11 +53,32 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
       if (result.players.length > 0) {
         fetchAppUsers(result.players)
       }
+
+      if (result.matchId) {
+        checkExistingMatch(result.matchId)
+      } else {
+        setExistingMatchId(null)
+      }
     } else {
       setParsed(null)
       setAppUsers(new Map())
+      setExistingMatchId(null)
     }
   }, [statusText])
+
+  async function checkExistingMatch(dotaMatchId: string) {
+    try {
+      const { data } = await supabase
+        .from("matches")
+        .select("id")
+        .eq("dota_match_id", parseInt(dotaMatchId))
+        .maybeSingle()
+
+      setExistingMatchId(data?.id ?? null)
+    } catch {
+      setExistingMatchId(null)
+    }
+  }
 
   async function fetchAppUsers(players: ParsedStatusPlayer[]) {
     try {
@@ -94,6 +117,25 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
   async function handleConfirm() {
     if (!parsed || !user) return
 
+    if (existingMatchId) {
+      const confirmed = window.confirm(
+        "This will delete the existing match and create a new one. Notes will be preserved on players. Continue?"
+      )
+      if (!confirmed) return
+
+      try {
+        const { error } = await supabase
+          .from("matches")
+          .delete()
+          .eq("id", existingMatchId)
+        if (error) throw error
+      } catch (error) {
+        toast.error("Failed to delete existing match")
+        console.error(error)
+        return
+      }
+    }
+
     try {
       const match = await createMatch(
         statusText,
@@ -102,7 +144,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
         ourTeamSlot,
         user.id
       )
-      toast.success("Match created successfully")
+      toast.success(existingMatchId ? "Match overwritten" : "Match created successfully")
       onOpenChange(false)
       navigate(`/match/${match.id}`)
     } catch (error) {
@@ -202,6 +244,12 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
               </div>
 
+              {existingMatchId && (
+                <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                  A match with this Dota Match ID already exists. Creating will overwrite it.
+                </div>
+              )}
+
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -213,8 +261,13 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 <Button
                   onClick={handleConfirm}
                   disabled={creating}
+                  variant={existingMatchId ? "destructive" : "default"}
                 >
-                  {creating ? "Creating..." : "Create Match"}
+                  {creating
+                    ? "Creating..."
+                    : existingMatchId
+                      ? "Overwrite Match"
+                      : "Create Match"}
                 </Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import type { ParsedStatus, ParsedStatusPlayer } from "./types"
 
 const MATCH_ID_RE = /\[Client\]\s+Lobby MatchID:\s+(\d+)/
-const PLAYER_RE = /^\[Client\]\s+(\d+)\s+[\d:]+\s+\d+\s+\d+\s+\w+\s+\d+\s+'(.+)'$/
+const PLAYER_RE = /^\[Client\]\s+(\d+)\s+[^']+\s*'(.+)'$/
 
 export function parseStatus(text: string): ParsedStatus {
   const lines = text.replace(/\r/g, "").split("\n")
