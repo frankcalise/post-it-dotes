@@ -4,6 +4,7 @@ import type { Player, PlayerTag, Tag, Note, MatchPlayer } from "@/lib/types"
 
 export type PlayerWithTags = Player & {
   tags: (PlayerTag & { tag: Tag })[]
+  match_players: { count: number }[]
 }
 
 export type PlayerWithDetails = Player & {
@@ -32,7 +33,8 @@ export function usePlayers() {
           tags:player_tags (
             *,
             tag:tags (*)
-          )
+          ),
+          match_players (count)
         `
         )
         .order("created_at", { ascending: false })

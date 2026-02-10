@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type RefObject } from "react"
 import { useNotes, useAddNote, useUpdateNote, useDeleteNote } from "@/hooks/use-notes"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
@@ -9,9 +9,10 @@ import { Edit2, Trash2, Save, X } from "lucide-react"
 type PlayerNotesProps = {
   playerId: string
   matchId?: string
+  inputRef?: RefObject<HTMLTextAreaElement | null>
 }
 
-export function PlayerNotes({ playerId, matchId }: PlayerNotesProps) {
+export function PlayerNotes({ playerId, matchId, inputRef }: PlayerNotesProps) {
   const [noteContent, setNoteContent] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editContent, setEditContent] = useState("")
@@ -85,9 +86,16 @@ export function PlayerNotes({ playerId, matchId }: PlayerNotesProps) {
       {user && (
         <div className="space-y-2">
           <Textarea
+            ref={inputRef}
             placeholder={matchId ? "Add a note for this match..." : "Add a note about this player..."}
             value={noteContent}
             onChange={(e) => setNoteContent(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault()
+                handleAddNote()
+              }
+            }}
             rows={3}
             className="resize-none"
           />

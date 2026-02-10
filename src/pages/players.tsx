@@ -41,7 +41,7 @@ export default function PlayersPage() {
       ) : (
         <div className="space-y-2">
           {players.map((player) => {
-            const matchCount = 0
+            const matchCount = player.match_players[0]?.count ?? 0
 
             return (
               <Link key={player.id} to={`/player/${player.id}`}>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, Link } from "react-router-dom"
 import { usePlayer } from "@/hooks/use-players"
 import { useHeroes } from "@/hooks/use-heroes"
@@ -15,6 +15,7 @@ export default function PlayerPage() {
   const { player, loading, error } = usePlayer(id)
   const { getHeroName } = useHeroes()
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
+  const noteInputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     function handleKeyPress(e: KeyboardEvent) {
@@ -24,6 +25,11 @@ export default function PlayerPage() {
       if ((e.key === "t" || e.key === "T") && id) {
         e.preventDefault()
         setTagDialogOpen(true)
+      }
+
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault()
+        noteInputRef.current?.focus()
       }
     }
 
@@ -126,7 +132,7 @@ export default function PlayerPage() {
       </div>
 
       <Card className="p-6">
-        <PlayerNotes playerId={player.id} />
+        <PlayerNotes playerId={player.id} inputRef={noteInputRef} />
       </Card>
 
       <Card className="p-6 space-y-4">
