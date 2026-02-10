@@ -34,36 +34,54 @@ export function OpenDotaFetchButton({
 
       if (updateError) throw updateError
 
-      for (const odPlayer of openDotaData.players) {
-        if (!odPlayer.account_id) continue
+      // Fetch all match_players for this match in one query
+      const { data: matchPlayers, error: fetchError } = await supabase
+        .from("match_players")
+        .select("id, player_id, display_name, players!inner(id, steam_account_id)")
+        .eq("match_id", matchId)
 
-        const { data: matchPlayers, error: fetchError } = await supabase
-          .from("match_players")
-          .select("id, player_id, players!inner(steam_account_id)")
-          .eq("match_id", matchId)
+      if (fetchError) throw fetchError
 
-        if (fetchError) throw fetchError
-
-        const matchPlayer = matchPlayers.find(
-          (mp) => (mp.players as any)?.steam_account_id === odPlayer.account_id
-        )
-
-        if (matchPlayer) {
-          const { error: updatePlayerError } = await supabase
-            .from("match_players")
-            .update({
-              hero_id: odPlayer.hero_id,
-              kills: odPlayer.kills,
-              deaths: odPlayer.deaths,
-              assists: odPlayer.assists,
-            })
-            .eq("id", matchPlayer.id)
-
-          if (updatePlayerError) throw updatePlayerError
+      // Build lowercase name → match_player lookup
+      const nameMap = new Map<string, (typeof matchPlayers)[number]>()
+      for (const mp of matchPlayers) {
+        if (mp.display_name) {
+          nameMap.set(mp.display_name.toLowerCase(), mp)
         }
       }
 
-      toast.success("OpenDota data fetched successfully")
+      let updatedCount = 0
+      for (const odPlayer of openDotaData.players) {
+        if (!odPlayer.personaname) continue
+
+        const mp = nameMap.get(odPlayer.personaname.toLowerCase())
+        if (!mp) continue
+
+        const { error: updateMpError } = await supabase
+          .from("match_players")
+          .update({
+            hero_id: odPlayer.hero_id,
+            kills: odPlayer.kills,
+            deaths: odPlayer.deaths,
+            assists: odPlayer.assists,
+          })
+          .eq("id", mp.id)
+
+        if (updateMpError) throw updateMpError
+        updatedCount++
+
+        // Backfill steam_account_id if player doesn't have one yet
+        const player = mp.players as any
+        if (odPlayer.account_id && player && !player.steam_account_id) {
+          await supabase
+            .from("players")
+            .update({ steam_account_id: odPlayer.account_id })
+            .eq("id", player.id)
+        }
+      }
+
+      const totalOdPlayers = openDotaData.players.length
+      toast.success(`Updated ${updatedCount}/${totalOdPlayers} players`)
       onFetched()
     } catch (error) {
       console.error("Error fetching OpenDota data:", error)

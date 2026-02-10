@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import type { MatchPlayerWithDetails } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { useHeroes } from "@/hooks/use-heroes"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 
@@ -18,6 +19,7 @@ export function MatchPlayerRow({
   onSelect,
 }: MatchPlayerRowProps) {
   const { display_name, hero_id, kills, deaths, assists, player } = matchPlayer
+  const { getHeroName } = useHeroes()
   const hasKDA = kills !== null && deaths !== null && assists !== null
 
   return (
@@ -46,7 +48,7 @@ export function MatchPlayerRow({
         </div>
 
         {hero_id && (
-          <div className="text-sm text-muted-foreground">Hero ID: {hero_id}</div>
+          <div className="text-sm text-muted-foreground">{getHeroName(hero_id)}</div>
         )}
 
         {hasKDA && (
