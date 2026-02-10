@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
 import { Toaster } from "sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { AuthProvider } from "@/hooks/use-auth"
+import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog"
 import AuthGuard from "@/components/layout/auth-guard"
 import AppShell from "@/components/layout/app-shell"
 import LoginPage from "@/pages/login"
@@ -29,6 +30,7 @@ export default function App() {
             </Route>
           </Routes>
 
+          <KeyboardShortcutsDialog />
           <Toaster position="top-right" richColors />
         </TooltipProvider>
       </AuthProvider>

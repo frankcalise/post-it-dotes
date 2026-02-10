@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import type { Match, MatchPlayerWithDetails } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
@@ -16,6 +17,7 @@ type MatchViewProps = {
 }
 
 export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: MatchViewProps) {
+  const navigate = useNavigate()
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const [appUserSlots, setAppUserSlots] = useState<Set<number>>(new Set())
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
@@ -93,6 +95,14 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
     [onRefetch]
   )
 
+  const team1Players = matchPlayers.filter((p) => p.team === 1)
+  const team2Players = matchPlayers.filter((p) => p.team === 2)
+
+  const allSlots = useMemo(
+    () => [...team1Players, ...team2Players].map((p) => p.slot),
+    [team1Players, team2Players]
+  )
+
   useEffect(() => {
     function handleKeyPress(e: KeyboardEvent) {
       const tag = document.activeElement?.tagName
@@ -107,15 +117,27 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
       } else if ((e.key === "t" || e.key === "T") && selectedPlayer) {
         e.preventDefault()
         setTagPickerOpen(true)
+      } else if (e.key === "i" || e.key === "I") {
+        e.preventDefault()
+        if (allSlots.length === 0) return
+        const currentIdx = selectedSlot !== null ? allSlots.indexOf(selectedSlot) : -1
+        const nextIdx = currentIdx <= 0 ? 0 : currentIdx - 1
+        setSelectedSlot(allSlots[nextIdx])
+      } else if (e.key === "k" || e.key === "K") {
+        e.preventDefault()
+        if (allSlots.length === 0) return
+        const currentIdx = selectedSlot !== null ? allSlots.indexOf(selectedSlot) : -1
+        const nextIdx = currentIdx < allSlots.length - 1 ? currentIdx + 1 : allSlots.length - 1
+        setSelectedSlot(allSlots[nextIdx])
+      } else if ((e.key === "o" || e.key === "O") && selectedPlayer) {
+        e.preventDefault()
+        navigate(`/player/${selectedPlayer.player.id}`)
       }
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [movePlayerToTeam, selectedPlayer])
-
-  const team1Players = matchPlayers.filter((p) => p.team === 1)
-  const team2Players = matchPlayers.filter((p) => p.team === 2)
+  }, [movePlayerToTeam, selectedPlayer, allSlots, selectedSlot])
 
   const matchDate = new Date(match.created_at).toLocaleString()
 
