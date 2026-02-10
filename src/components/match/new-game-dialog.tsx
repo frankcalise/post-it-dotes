@@ -79,6 +79,18 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
     }
   }
 
+  useEffect(() => {
+    if (!parsed || appUsers.size === 0) return
+
+    const updatedPlayers = parsed.players.map((p) => {
+      const isAppUser = appUsers.has(p.slot)
+      return { ...p, team: (isAppUser ? 1 : 2) as 1 | 2 }
+    })
+
+    setParsed({ ...parsed, players: updatedPlayers })
+    setOurTeamSlot(1)
+  }, [appUsers])
+
   async function handleConfirm() {
     if (!parsed || !user) return
 
@@ -134,33 +146,9 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
               </div>
 
-              {hasAppUsers && (
-                <div className="rounded-lg border bg-muted/50 p-3">
-                  <p className="text-sm font-medium mb-2">Select your team:</p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={ourTeamSlot === 1 ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setOurTeamSlot(1)}
-                      className="flex-1"
-                    >
-                      Team 1
-                    </Button>
-                    <Button
-                      variant={ourTeamSlot === 2 ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setOurTeamSlot(2)}
-                      className="flex-1"
-                    >
-                      Team 2
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <h3 className="font-medium text-sm">Team 1</h3>
+                  <h3 className="font-medium text-sm">{hasAppUsers ? "Our Team" : "Team 1"}</h3>
                   <div className="space-y-1">
                     {team1Players.map((player) => {
                       const isAppUser = appUsers.has(player.slot)
@@ -187,7 +175,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="font-medium text-sm">Team 2</h3>
+                  <h3 className="font-medium text-sm">{hasAppUsers ? "Opponents" : "Team 2"}</h3>
                   <div className="space-y-1">
                     {team2Players.map((player) => {
                       const isAppUser = appUsers.has(player.slot)
@@ -224,7 +212,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </Button>
                 <Button
                   onClick={handleConfirm}
-                  disabled={creating || (hasAppUsers && !ourTeamSlot)}
+                  disabled={creating}
                 >
                   {creating ? "Creating..." : "Create Match"}
                 </Button>

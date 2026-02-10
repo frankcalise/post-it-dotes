@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import { usePlayer } from "@/hooks/use-players"
 import { useHeroes } from "@/hooks/use-heroes"
