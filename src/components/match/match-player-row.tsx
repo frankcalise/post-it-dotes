@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { MessageSquare } from "lucide-react"
 import type { MatchPlayerWithDetails } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { useHeroes } from "@/hooks/use-heroes"
@@ -10,6 +11,7 @@ type MatchPlayerRowProps = {
   isSelected: boolean
   isAppUser: boolean
   onSelect: () => void
+  onOpenNotes?: () => void
 }
 
 export function MatchPlayerRow({
@@ -17,10 +19,16 @@ export function MatchPlayerRow({
   isSelected,
   isAppUser,
   onSelect,
+  onOpenNotes,
 }: MatchPlayerRowProps) {
   const { display_name, hero_id, kills, deaths, assists, player } = matchPlayer
   const { getHeroName } = useHeroes()
   const hasKDA = kills !== null && deaths !== null && assists !== null
+  const sortedNotes = player.notes
+    ? [...player.notes].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    : []
 
   return (
     <Card
@@ -40,11 +48,25 @@ export function MatchPlayerRow({
           >
             {display_name || "Unknown Player"}
           </Link>
-          {isAppUser && (
-            <Badge variant="secondary" className="text-xs">
-              Us
-            </Badge>
-          )}
+          <div className="flex items-center gap-1.5">
+            {sortedNotes.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenNotes?.()
+                }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="View notes"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </button>
+            )}
+            {isAppUser && (
+              <Badge variant="secondary" className="text-xs">
+                Us
+              </Badge>
+            )}
+          </div>
         </div>
 
         {hero_id && (
@@ -79,10 +101,9 @@ export function MatchPlayerRow({
           </div>
         )}
 
-        {isSelected && player.notes && player.notes.length > 0 && (
-          <div className="mt-3 pt-3 border-t space-y-2">
-            <div className="text-sm font-medium">Notes:</div>
-            {player.notes.slice(0, 3).map((note) => (
+        {sortedNotes.length > 0 && (
+          <div className="mt-2 pt-2 border-t space-y-1.5">
+            {sortedNotes.slice(0, 2).map((note) => (
               <div
                 key={note.id}
                 className="text-sm text-muted-foreground bg-muted/50 rounded p-2"
@@ -90,9 +111,9 @@ export function MatchPlayerRow({
                 {note.content}
               </div>
             ))}
-            {player.notes.length > 3 && (
+            {sortedNotes.length > 2 && (
               <div className="text-xs text-muted-foreground text-center">
-                +{player.notes.length - 3} more notes
+                +{sortedNotes.length - 2} more notes
               </div>
             )}
           </div>
