@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
+import { useState, useEffect, useRef } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { useMatches } from "@/hooks/use-matches"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { NewGameDialog } from "@/components/match/new-game-dialog"
@@ -8,23 +9,44 @@ import { NewGameDialog } from "@/components/match/new-game-dialog"
 export default function MatchesPage() {
   const { matches, loading, error } = useMatches()
   const [newGameDialogOpen, setNewGameDialogOpen] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
+  const navigate = useNavigate()
+  const selectedRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    selectedRef.current?.scrollIntoView({ block: "nearest" })
+  }, [selectedIndex])
 
   useEffect(() => {
     function handleKeyPress(e: KeyboardEvent) {
+      const tag = document.activeElement?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+
       if (e.key === "n" || e.key === "N") {
-        if (
-          document.activeElement?.tagName !== "INPUT" &&
-          document.activeElement?.tagName !== "TEXTAREA"
-        ) {
+        e.preventDefault()
+        setNewGameDialogOpen(true)
+        return
+      }
+
+      if (matches.length === 0) return
+
+      if (e.key === "i" || e.key === "I") {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.max(0, prev - 1))
+      } else if (e.key === "k" || e.key === "K") {
+        e.preventDefault()
+        setSelectedIndex((prev) => Math.min(matches.length - 1, prev + 1))
+      } else if (e.key === "o" || e.key === "O") {
+        if (selectedIndex >= 0 && selectedIndex < matches.length) {
           e.preventDefault()
-          setNewGameDialogOpen(true)
+          navigate(`/match/${matches[selectedIndex].id}`)
         }
       }
     }
 
     window.addEventListener("keydown", handleKeyPress)
     return () => window.removeEventListener("keydown", handleKeyPress)
-  }, [])
+  }, [matches, selectedIndex, navigate])
 
   if (loading) {
     return (
@@ -84,7 +106,7 @@ export default function MatchesPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {matches.map((match) => {
+          {matches.map((match, index) => {
             const matchDate = new Date(match.created_at).toLocaleDateString(
               undefined,
               {
@@ -95,10 +117,15 @@ export default function MatchesPage() {
                 minute: "2-digit",
               }
             )
+            const isSelected = index === selectedIndex
 
             return (
-              <Link key={match.id} to={`/match/${match.id}`}>
-                <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+              <div key={match.id} ref={isSelected ? selectedRef : undefined}>
+              <Link to={`/match/${match.id}`}>
+                <Card className={cn(
+                  "hover:bg-muted/50 transition-colors cursor-pointer",
+                  isSelected && "ring-2 ring-primary"
+                )}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg">
@@ -147,6 +174,7 @@ export default function MatchesPage() {
                   </CardContent>
                 </Card>
               </Link>
+              </div>
             )
           })}
         </div>
