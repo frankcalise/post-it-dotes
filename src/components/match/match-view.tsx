@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TeamPanel } from "./team-panel"
 import { OpenDotaFetchButton } from "./opendota-fetch-button"
+import { PlayerNotesDialog } from "./player-notes-dialog"
 import { TagPickerDialog } from "@/components/tags/tag-picker"
 
 type MatchViewProps = {
@@ -21,6 +22,8 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const [appUserSlots, setAppUserSlots] = useState<Set<number>>(new Set())
   const [tagPickerOpen, setTagPickerOpen] = useState(false)
+  const [notesDialogPlayerId, setNotesDialogPlayerId] = useState<string | null>(null)
+  const [notesDialogPlayerName, setNotesDialogPlayerName] = useState<string | null>(null)
 
   const selectedPlayer = useMemo(
     () => matchPlayers.find((p) => p.slot === selectedSlot),
@@ -132,6 +135,10 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
       } else if ((e.key === "o" || e.key === "O") && selectedPlayer) {
         e.preventDefault()
         navigate(`/player/${selectedPlayer.player.id}`)
+      } else if ((e.key === "n" || e.key === "N") && selectedPlayer) {
+        e.preventDefault()
+        setNotesDialogPlayerId(selectedPlayer.player.id)
+        setNotesDialogPlayerName(selectedPlayer.display_name)
       }
     }
 
@@ -159,18 +166,17 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
                   <span className="font-mono">{match.dota_match_id}</span>
                 </div>
               )}
-              {!match.opendota_fetched && (
-                <OpenDotaFetchButton
-                  matchId={match.id}
-                  dotaMatchId={match.dota_match_id}
-                  onFetched={onRefetch}
-                />
-              )}
               {match.opendota_fetched && (
                 <div className="text-xs text-green-600 dark:text-green-400">
                   ✓ Data fetched
                 </div>
               )}
+              <OpenDotaFetchButton
+                matchId={match.id}
+                dotaMatchId={match.dota_match_id}
+                alreadyFetched={match.opendota_fetched}
+                onFetched={onRefetch}
+              />
             </div>
           </div>
         </CardHeader>
@@ -200,6 +206,10 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
           appUserSlots={appUserSlots}
+          onOpenNotes={(playerId, playerName) => {
+            setNotesDialogPlayerId(playerId)
+            setNotesDialogPlayerName(playerName)
+          }}
         />
         <TeamPanel
           players={team2Players}
@@ -208,6 +218,10 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
           appUserSlots={appUserSlots}
+          onOpenNotes={(playerId, playerName) => {
+            setNotesDialogPlayerId(playerId)
+            setNotesDialogPlayerName(playerName)
+          }}
         />
       </div>
 
@@ -218,6 +232,20 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           onOpenChange={handleTagPickerClose}
         />
       )}
+
+      <PlayerNotesDialog
+        playerId={notesDialogPlayerId}
+        playerName={notesDialogPlayerName}
+        matchId={match.id}
+        open={notesDialogPlayerId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNotesDialogPlayerId(null)
+            setNotesDialogPlayerName(null)
+            onRefetch()
+          }
+        }}
+      />
     </div>
   )
 }

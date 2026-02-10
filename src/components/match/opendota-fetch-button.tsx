@@ -7,12 +7,20 @@ import { Button } from "@/components/ui/button"
 type OpenDotaFetchButtonProps = {
   matchId: string
   dotaMatchId: number | null
+  alreadyFetched: boolean
   onFetched: () => void
+}
+
+function odSlotToOurSlot(playerSlot: number): number {
+  // OpenDota player_slot: 0-4 radiant, 128-132 dire
+  if (playerSlot <= 4) return playerSlot + 1
+  return playerSlot - 128 + 6
 }
 
 export function OpenDotaFetchButton({
   matchId,
   dotaMatchId,
+  alreadyFetched,
   onFetched,
 }: OpenDotaFetchButtonProps) {
   const [fetching, setFetching] = useState(false)
@@ -34,28 +42,38 @@ export function OpenDotaFetchButton({
 
       if (updateError) throw updateError
 
-      // Fetch all match_players for this match in one query
       const { data: matchPlayers, error: fetchError } = await supabase
         .from("match_players")
-        .select("id, player_id, display_name, players!inner(id, steam_account_id)")
+        .select("id, slot, player_id, display_name, players!inner(id, steam_account_id)")
         .eq("match_id", matchId)
 
       if (fetchError) throw fetchError
+      if (!matchPlayers) throw new Error("No match players found")
+
+      type MatchPlayerRow = NonNullable<typeof matchPlayers>[number]
 
       // Build lowercase name → match_player lookup
-      const nameMap = new Map<string, (typeof matchPlayers)[number]>()
+      const nameMap = new Map<string, MatchPlayerRow>()
       for (const mp of matchPlayers) {
         if (mp.display_name) {
           nameMap.set(mp.display_name.toLowerCase(), mp)
         }
       }
 
-      let updatedCount = 0
-      for (const odPlayer of openDotaData.players) {
-        if (!odPlayer.personaname) continue
+      // Build slot → match_player lookup for fallback
+      const slotMap = new Map<number, MatchPlayerRow>()
+      for (const mp of matchPlayers) {
+        slotMap.set(mp.slot, mp)
+      }
 
-        const mp = nameMap.get(odPlayer.personaname.toLowerCase())
-        if (!mp) continue
+      const matchedIds = new Set<string>()
+      let updatedCount = 0
+
+      async function updateMatchPlayer(
+        mp: MatchPlayerRow,
+        odPlayer: (typeof openDotaData.players)[number]
+      ) {
+        matchedIds.add(mp.id)
 
         const { error: updateMpError } = await supabase
           .from("match_players")
@@ -70,7 +88,6 @@ export function OpenDotaFetchButton({
         if (updateMpError) throw updateMpError
         updatedCount++
 
-        // Backfill steam_account_id if player doesn't have one yet
         const player = mp.players as any
         if (odPlayer.account_id && player && !player.steam_account_id) {
           await supabase
@@ -78,6 +95,22 @@ export function OpenDotaFetchButton({
             .update({ steam_account_id: odPlayer.account_id })
             .eq("id", player.id)
         }
+      }
+
+      // Pass 1: match by personaname
+      for (const odPlayer of openDotaData.players) {
+        if (!odPlayer.personaname) continue
+        const mp = nameMap.get(odPlayer.personaname.toLowerCase())
+        if (!mp) continue
+        await updateMatchPlayer(mp, odPlayer)
+      }
+
+      // Pass 2: match unmatched players by slot position
+      for (const odPlayer of openDotaData.players) {
+        const ourSlot = odSlotToOurSlot(odPlayer.player_slot)
+        const mp = slotMap.get(ourSlot)
+        if (!mp || matchedIds.has(mp.id)) continue
+        await updateMatchPlayer(mp, odPlayer)
       }
 
       const totalOdPlayers = openDotaData.players.length
@@ -91,6 +124,12 @@ export function OpenDotaFetchButton({
     }
   }
 
+  const label = fetching
+    ? "Fetching..."
+    : alreadyFetched
+      ? "Re-fetch"
+      : "Fetch from OpenDota"
+
   return (
     <Button
       onClick={handleFetch}
@@ -98,7 +137,7 @@ export function OpenDotaFetchButton({
       size="sm"
       variant="outline"
     >
-      {fetching ? "Fetching..." : "Fetch from OpenDota"}
+      {label}
     </Button>
   )
 }

@@ -24,6 +24,7 @@ const sections = [
       { key: "O", description: "Open player" },
       { key: "1 / 2", description: "Move player to team" },
       { key: "T", description: "Tag player" },
+      { key: "N", description: "View player notes" },
     ],
   },
   {

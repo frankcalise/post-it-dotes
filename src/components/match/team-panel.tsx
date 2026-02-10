@@ -10,6 +10,7 @@ type TeamPanelProps = {
   selectedSlot: number | null
   onSelectSlot: (slot: number) => void
   appUserSlots: Set<number>
+  onOpenNotes: (playerId: string, playerName: string | null) => void
 }
 
 export function TeamPanel({
@@ -19,6 +20,7 @@ export function TeamPanel({
   selectedSlot,
   onSelectSlot,
   appUserSlots,
+  onOpenNotes,
 }: TeamPanelProps) {
   const teamLabel = isOurTeam ? "Our Team" : `Team ${teamNumber}`
 
@@ -47,6 +49,7 @@ export function TeamPanel({
               isSelected={selectedSlot === player.slot}
               isAppUser={appUserSlots.has(player.slot)}
               onSelect={() => onSelectSlot(player.slot)}
+              onOpenNotes={() => onOpenNotes(player.player.id, player.display_name)}
             />
           ))
         )}
