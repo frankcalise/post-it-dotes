@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback } from "react"
+import { useCallback, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
+import { queryKeys } from "@/lib/query-keys"
 import type { Player, PlayerTag, Tag, Note, MatchPlayer } from "@/lib/types"
 
 export type PlayerWithTags = Player & {
@@ -14,17 +16,9 @@ export type PlayerWithDetails = Player & {
 }
 
 export function usePlayers() {
-  const [players, setPlayers] = useState<PlayerWithTags[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    fetchPlayers()
-  }, [])
-
-  async function fetchPlayers() {
-    try {
-      setLoading(true)
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.players.all,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("players")
         .select(
@@ -40,37 +34,22 @@ export function usePlayers() {
         .order("created_at", { ascending: false })
 
       if (error) throw error
-      setPlayers(data as PlayerWithTags[] || [])
-      setError(null)
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error fetching players:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data as PlayerWithTags[]
+    },
+  })
 
-  return { players, loading, error, refetch: fetchPlayers }
+  return {
+    players: data ?? [],
+    loading: isLoading,
+    error: error as Error | null,
+    refetch,
+  }
 }
 
 export function usePlayer(id: string | undefined) {
-  const [player, setPlayer] = useState<PlayerWithDetails | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    if (!id) {
-      setLoading(false)
-      return
-    }
-
-    fetchPlayer(id)
-  }, [id])
-
-  async function fetchPlayer(playerId: string) {
-    try {
-      setLoading(true)
-
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.players.detail(id ?? ""),
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("players")
         .select(
@@ -91,37 +70,43 @@ export function usePlayer(id: string | undefined) {
           )
         `
         )
-        .eq("id", playerId)
+        .eq("id", id!)
         .single()
 
       if (error) throw error
-      setPlayer(data as PlayerWithDetails)
-      setError(null)
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error fetching player:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data as PlayerWithDetails
+    },
+    enabled: !!id,
+  })
 
-  return { player, loading, error }
+  return {
+    player: data ?? null,
+    loading: isLoading,
+    error: error as Error | null,
+  }
 }
 
 export function useSearchPlayers() {
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
 
   const searchPlayers = useCallback(async (query: string): Promise<PlayerWithTags[]> => {
-    if (!query.trim()) {
-      return []
+    if (!query.trim()) return []
+
+    const cached = queryClient.getQueryData<PlayerWithTags[]>(queryKeys.players.all)
+    if (cached) {
+      return cached.filter((player) =>
+        player.known_names.some((name) =>
+          name.toLowerCase().includes(query.toLowerCase())
+        )
+      )
     }
 
     try {
       setSearching(true)
       setError(null)
 
-      // Search for players where any of their known_names contains the query
       const { data, error } = await supabase
         .from("players")
         .select(
@@ -137,14 +122,12 @@ export function useSearchPlayers() {
 
       if (error) throw error
 
-      // Filter client-side for fuzzy matching against known_names
-      const filtered = (data as PlayerWithTags[] || []).filter((player) =>
+      const all = (data as PlayerWithTags[]) || []
+      return all.filter((player) =>
         player.known_names.some((name) =>
           name.toLowerCase().includes(query.toLowerCase())
         )
       )
-
-      return filtered
     } catch (err) {
       setError(err as Error)
       console.error("Error searching players:", err)
@@ -152,7 +135,7 @@ export function useSearchPlayers() {
     } finally {
       setSearching(false)
     }
-  }, [])
+  }, [queryClient])
 
   return { searchPlayers, searching, error }
 }

@@ -1,37 +1,27 @@
-import { useEffect, useState, useCallback } from "react"
+import { useCallback, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
+import { queryKeys } from "@/lib/query-keys"
 import type { Tag, PlayerTag } from "@/lib/types"
 
 export function useTags() {
-  const [tags, setTags] = useState<Tag[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    fetchTags()
-  }, [])
-
-  async function fetchTags() {
-    try {
-      setLoading(true)
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.tags.all,
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("tags")
         .select("*")
         .order("name", { ascending: true })
 
       if (error) throw error
-      setTags(data || [])
-      setError(null)
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error fetching tags:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data as Tag[]
+    },
+  })
 
-  const createTag = useCallback(async (name: string, color: string, userId: string | null) => {
-    try {
+  const createMutation = useMutation({
+    mutationFn: async ({ name, color, userId }: { name: string; color: string; userId: string | null }) => {
       const { data, error } = await supabase
         .from("tags")
         .insert({ name, color, created_by: userId })
@@ -39,16 +29,15 @@ export function useTags() {
         .single()
 
       if (error) throw error
-      setTags((prev) => [...prev, data])
-      return data
-    } catch (err) {
-      console.error("Error creating tag:", err)
-      throw err
-    }
-  }, [])
+      return data as Tag
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
+    },
+  })
 
-  const updateTag = useCallback(async (id: string, updates: { name?: string; color?: string }) => {
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: { name?: string; color?: string } }) => {
       const { data, error } = await supabase
         .from("tags")
         .update(updates)
@@ -57,48 +46,57 @@ export function useTags() {
         .single()
 
       if (error) throw error
-      setTags((prev) => prev.map((t) => (t.id === id ? data : t)))
-      return data
-    } catch (err) {
-      console.error("Error updating tag:", err)
-      throw err
-    }
-  }, [])
+      return data as Tag
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
+    },
+  })
 
-  const deleteTag = useCallback(async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from("tags")
-        .delete()
-        .eq("id", id)
-
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("tags").delete().eq("id", id)
       if (error) throw error
-      setTags((prev) => prev.filter((t) => t.id !== id))
-    } catch (err) {
-      console.error("Error deleting tag:", err)
-      throw err
-    }
-  }, [])
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags.all })
+    },
+  })
 
-  return { tags, loading, error, refetch: fetchTags, createTag, updateTag, deleteTag }
+  const createTag = useCallback(
+    (name: string, color: string, userId: string | null) =>
+      createMutation.mutateAsync({ name, color, userId }),
+    [createMutation.mutateAsync]
+  )
+
+  const updateTag = useCallback(
+    (id: string, updates: { name?: string; color?: string }) =>
+      updateMutation.mutateAsync({ id, updates }),
+    [updateMutation.mutateAsync]
+  )
+
+  const deleteTag = useCallback(
+    (id: string) => deleteMutation.mutateAsync(id),
+    [deleteMutation.mutateAsync]
+  )
+
+  return {
+    tags: data ?? [],
+    loading: isLoading,
+    error: error as Error | null,
+    refetch,
+    createTag,
+    updateTag,
+    deleteTag,
+  }
 }
 
 export function usePlayerTags(playerId: string) {
-  const [playerTags, setPlayerTags] = useState<(PlayerTag & { tag: Tag })[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    if (!playerId) {
-      setLoading(false)
-      return
-    }
-    fetchPlayerTags()
-  }, [playerId])
-
-  async function fetchPlayerTags() {
-    try {
-      setLoading(true)
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: queryKeys.tags.byPlayer(playerId),
+    queryFn: async () => {
       const { data, error } = await supabase
         .from("player_tags")
         .select(`
@@ -108,18 +106,45 @@ export function usePlayerTags(playerId: string) {
         .eq("player_id", playerId)
 
       if (error) throw error
-      setPlayerTags(data as (PlayerTag & { tag: Tag })[] || [])
-      setError(null)
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error fetching player tags:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data as (PlayerTag & { tag: Tag })[]
+    },
+    enabled: !!playerId,
+  })
 
-  const addTag = useCallback(async (tagId: string, userId: string | null) => {
-    try {
+  useEffect(() => {
+    if (!playerId) return
+
+    const invalidate = () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.tags.byPlayer(playerId),
+      })
+
+    const channel = supabase
+      .channel(`player-tags-${playerId}-${crypto.randomUUID()}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "player_tags", filter: `player_id=eq.${playerId}` },
+        invalidate
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "player_tags", filter: `player_id=eq.${playerId}` },
+        invalidate
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "player_tags" },
+        invalidate
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel).catch(() => {})
+    }
+  }, [playerId, queryClient])
+
+  const addMutation = useMutation({
+    mutationFn: async ({ tagId, userId }: { tagId: string; userId: string | null }) => {
       const { data, error } = await supabase
         .from("player_tags")
         .insert({ player_id: playerId, tag_id: tagId, tagged_by: userId })
@@ -130,15 +155,15 @@ export function usePlayerTags(playerId: string) {
         .single()
 
       if (error) throw error
-      setPlayerTags((prev) => [...prev, data as PlayerTag & { tag: Tag }])
-    } catch (err) {
-      console.error("Error adding tag:", err)
-      throw err
-    }
-  }, [playerId])
+      return data as PlayerTag & { tag: Tag }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags.byPlayer(playerId) })
+    },
+  })
 
-  const removeTag = useCallback(async (tagId: string) => {
-    try {
+  const removeMutation = useMutation({
+    mutationFn: async (tagId: string) => {
       const { error } = await supabase
         .from("player_tags")
         .delete()
@@ -146,12 +171,29 @@ export function usePlayerTags(playerId: string) {
         .eq("tag_id", tagId)
 
       if (error) throw error
-      setPlayerTags((prev) => prev.filter((pt) => pt.tag_id !== tagId))
-    } catch (err) {
-      console.error("Error removing tag:", err)
-      throw err
-    }
-  }, [playerId])
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.tags.byPlayer(playerId) })
+    },
+  })
 
-  return { playerTags, loading, error, addTag, removeTag, refetch: fetchPlayerTags }
+  const addTag = useCallback(
+    (tagId: string, userId: string | null) =>
+      addMutation.mutateAsync({ tagId, userId }),
+    [addMutation.mutateAsync]
+  )
+
+  const removeTag = useCallback(
+    (tagId: string) => removeMutation.mutateAsync(tagId),
+    [removeMutation.mutateAsync]
+  )
+
+  return {
+    playerTags: data ?? [],
+    loading: isLoading,
+    error: error as Error | null,
+    addTag,
+    removeTag,
+    refetch,
+  }
 }

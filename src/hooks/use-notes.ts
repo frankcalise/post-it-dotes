@@ -1,114 +1,126 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useCallback } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { supabase } from "@/lib/supabase"
+import { queryKeys } from "@/lib/query-keys"
 import type { Note } from "@/lib/types"
 
 export function useNotes(playerId: string | undefined) {
-  const [notes, setNotes] = useState<Note[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.notes.byPlayer(playerId ?? ""),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("player_id", playerId!)
+        .order("created_at", { ascending: false })
+
+      if (error) throw error
+      return data as Note[]
+    },
+    enabled: !!playerId,
+  })
 
   useEffect(() => {
-    if (!playerId) {
-      setLoading(false)
-      return
-    }
+    if (!playerId) return
 
-    let cancelled = false
-
-    async function fetchNotes() {
-      try {
-        const { data, error } = await supabase
-          .from("notes")
-          .select("*")
-          .eq("player_id", playerId!)
-          .order("created_at", { ascending: false })
-
-        if (cancelled) return
-        if (error) throw error
-        setNotes(data || [])
-        setError(null)
-      } catch (err) {
-        if (cancelled) return
-        setError(err as Error)
-        console.error("Error fetching notes:", err)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchNotes()
+    const invalidate = () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notes.byPlayer(playerId),
+      })
 
     const channel = supabase
       .channel(`notes-${playerId}-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "notes",
-          filter: `player_id=eq.${playerId}`,
-        },
-        () => {
-          if (!cancelled) fetchNotes()
-        }
+        { event: "INSERT", schema: "public", table: "notes", filter: `player_id=eq.${playerId}` },
+        invalidate
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notes", filter: `player_id=eq.${playerId}` },
+        invalidate
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "notes" },
+        invalidate
       )
       .subscribe()
 
     return () => {
-      cancelled = true
       supabase.removeChannel(channel).catch(() => {})
     }
-  }, [playerId])
+  }, [playerId, queryClient])
 
-  return { notes, loading, error }
+  return {
+    notes: data ?? [],
+    loading: isLoading,
+    error: error as Error | null,
+  }
 }
 
 export function useAddNote() {
-  const [adding, setAdding] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
+
+  const mutation = useMutation({
+    mutationFn: async ({
+      playerId,
+      content,
+      authorId,
+      matchId,
+    }: {
+      playerId: string
+      content: string
+      authorId: string
+      matchId?: string
+    }) => {
+      const { data, error } = await supabase
+        .from("notes")
+        .insert({
+          player_id: playerId,
+          content,
+          author_id: authorId,
+          match_id: matchId || null,
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Note
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notes.byPlayer(variables.playerId),
+      })
+    },
+  })
 
   const addNote = useCallback(
-    async (playerId: string, content: string, authorId: string, matchId?: string) => {
-      try {
-        setAdding(true)
-        setError(null)
-
-        const { data, error } = await supabase
-          .from("notes")
-          .insert({
-            player_id: playerId,
-            content,
-            author_id: authorId,
-            match_id: matchId || null,
-          })
-          .select()
-          .single()
-
-        if (error) throw error
-        return data
-      } catch (err) {
-        setError(err as Error)
-        console.error("Error adding note:", err)
-        throw err
-      } finally {
-        setAdding(false)
-      }
-    },
-    []
+    (playerId: string, content: string, authorId: string, matchId?: string) =>
+      mutation.mutateAsync({ playerId, content, authorId, matchId }),
+    [mutation.mutateAsync]
   )
 
-  return { addNote, adding, error }
+  return {
+    addNote,
+    adding: mutation.isPending,
+    error: mutation.error as Error | null,
+  }
 }
 
 export function useUpdateNote() {
-  const [updating, setUpdating] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
 
-  const updateNote = useCallback(async (noteId: string, content: string) => {
-    try {
-      setUpdating(true)
-      setError(null)
-
+  const mutation = useMutation({
+    mutationFn: async ({
+      noteId,
+      content,
+    }: {
+      noteId: string
+      content: string
+    }) => {
       const { data, error } = await supabase
         .from("notes")
         .update({ content, updated_at: new Date().toISOString() })
@@ -117,39 +129,49 @@ export function useUpdateNote() {
         .single()
 
       if (error) throw error
-      return data
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error updating note:", err)
-      throw err
-    } finally {
-      setUpdating(false)
-    }
-  }, [])
+      return data as Note
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.notes.byPlayer(data.player_id),
+      })
+    },
+  })
 
-  return { updateNote, updating, error }
+  const updateNote = useCallback(
+    (noteId: string, content: string) =>
+      mutation.mutateAsync({ noteId, content }),
+    [mutation.mutateAsync]
+  )
+
+  return {
+    updateNote,
+    updating: mutation.isPending,
+    error: mutation.error as Error | null,
+  }
 }
 
 export function useDeleteNote() {
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const queryClient = useQueryClient()
 
-  const deleteNote = useCallback(async (noteId: string) => {
-    try {
-      setDeleting(true)
-      setError(null)
-
+  const mutation = useMutation({
+    mutationFn: async (noteId: string) => {
       const { error } = await supabase.from("notes").delete().eq("id", noteId)
-
       if (error) throw error
-    } catch (err) {
-      setError(err as Error)
-      console.error("Error deleting note:", err)
-      throw err
-    } finally {
-      setDeleting(false)
-    }
-  }, [])
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notes"] })
+    },
+  })
 
-  return { deleteNote, deleting, error }
+  const deleteNote = useCallback(
+    (noteId: string) => mutation.mutateAsync(noteId),
+    [mutation.mutateAsync]
+  )
+
+  return {
+    deleteNote,
+    deleting: mutation.isPending,
+    error: mutation.error as Error | null,
+  }
 }
