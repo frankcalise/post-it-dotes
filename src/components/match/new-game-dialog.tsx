@@ -147,7 +147,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
       )
       toast.success(existingMatchId ? "Match overwritten" : "Match created successfully")
       onOpenChange(false)
-      navigate(`/match/${match.id}`)
+      navigate(`/match/${match.dota_match_id}`)
     } catch (error) {
       toast.error("Failed to create match")
       console.error(error)
@@ -283,6 +283,12 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
               </div>
 
+              {!parsed?.matchId && (
+                <div className="text-sm text-muted-foreground">
+                  No Match ID found in status output. Paste must include a match ID to create a game.
+                </div>
+              )}
+
               {existingMatchId && (
                 <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
                   A match with this Dota Match ID already exists. Creating will overwrite it.
@@ -299,7 +305,7 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </Button>
                 <Button
                   onClick={handleConfirm}
-                  disabled={creating}
+                  disabled={creating || !parsed?.matchId}
                   variant={existingMatchId ? "destructive" : "default"}
                 >
                   {creating

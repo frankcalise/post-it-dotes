@@ -91,17 +91,17 @@ export function useMatch(id: string | undefined) {
     try {
       if (!silent) setLoading(true)
 
-      // Fetch match
+      // Fetch match by dota_match_id
       const { data: matchData, error: matchError } = await supabase
         .from("matches")
         .select("*")
-        .eq("id", matchId)
+        .eq("dota_match_id", parseInt(matchId))
         .single()
 
       if (matchError) throw matchError
       setMatch(matchData)
 
-      // Fetch match players with all related data
+      // Fetch match players with all related data using internal UUID
       const { data: playersData, error: playersError } = await supabase
         .from("match_players")
         .select(
@@ -117,7 +117,7 @@ export function useMatch(id: string | undefined) {
           )
         `
         )
-        .eq("match_id", matchId)
+        .eq("match_id", matchData.id)
         .order("slot", { ascending: true })
 
       if (playersError) throw playersError

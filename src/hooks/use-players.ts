@@ -10,7 +10,7 @@ export type PlayerWithTags = Player & {
 export type PlayerWithDetails = Player & {
   tags: (PlayerTag & { tag: Tag })[]
   notes: Note[]
-  match_history: (MatchPlayer & { match: { id: string; created_at: string } })[]
+  match_history: (MatchPlayer & { match: { id: string; dota_match_id: number | null; created_at: string } })[]
 }
 
 export function usePlayers() {
@@ -85,6 +85,7 @@ export function usePlayer(id: string | undefined) {
             *,
             match:matches (
               id,
+              dota_match_id,
               created_at
             )
           )

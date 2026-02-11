@@ -39,7 +39,7 @@ export default function MatchesPage() {
       } else if (e.key === "o" || e.key === "O") {
         if (selectedIndex >= 0 && selectedIndex < matches.length) {
           e.preventDefault()
-          navigate(`/match/${matches[selectedIndex].id}`)
+          navigate(`/match/${matches[selectedIndex].dota_match_id}`)
         }
       }
     }
@@ -121,7 +121,7 @@ export default function MatchesPage() {
 
             return (
               <div key={match.id} ref={isSelected ? selectedRef : undefined}>
-              <Link to={`/match/${match.id}`}>
+              <Link to={`/match/${match.dota_match_id}`}>
                 <Card className={cn(
                   "hover:bg-muted/50 transition-colors cursor-pointer",
                   isSelected && "ring-2 ring-primary"

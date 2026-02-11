@@ -148,7 +148,7 @@ export default function PlayerPage() {
             {sortedMatches.map((mp) => (
               <Link
                 key={mp.id}
-                to={`/match/${mp.match_id}`}
+                to={`/match/${mp.match?.dota_match_id}`}
                 className="block"
               >
                 <Card className="p-4 hover:bg-accent transition-colors cursor-pointer">
