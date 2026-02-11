@@ -136,7 +136,7 @@ export default function MatchesPage() {
                       <div className="flex items-center gap-3">
                         {match.our_team_slot && (
                           <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                            Team {match.our_team_slot}
+                            {match.our_team_slot === 1 ? "Radiant" : "Dire"}
                           </span>
                         )}
                         {match.opendota_fetched && (

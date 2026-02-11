@@ -22,19 +22,13 @@ export function TeamPanel({
   appUserSlots,
   onOpenNotes,
 }: TeamPanelProps) {
-  const teamLabel = isOurTeam ? "Our Team" : `Team ${teamNumber}`
+  const side = teamNumber === 1 ? "Radiant" : "Dire"
+  const teamLabel = isOurTeam ? `${side} (Us)` : side
 
   return (
     <Card className={cn(isOurTeam && "ring-2 ring-primary/20")}>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          {teamLabel}
-          {isOurTeam && (
-            <span className="text-xs font-normal text-muted-foreground">
-              (You)
-            </span>
-          )}
-        </CardTitle>
+        <CardTitle>{teamLabel}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         {players.length === 0 ? (

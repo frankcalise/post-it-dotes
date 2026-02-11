@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import type { Match, MatchPlayerWithDetails } from "@/lib/types"
 import { supabase } from "@/lib/supabase"
+import { cn } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TeamPanel } from "./team-panel"
 import { OpenDotaFetchButton } from "./opendota-fetch-button"
 import { PlayerNotesDialog } from "./player-notes-dialog"
 import { TagPickerDialog } from "@/components/tags/tag-picker"
+import { ExternalLink } from "lucide-react"
 
 type MatchViewProps = {
   match: Match
@@ -98,6 +100,33 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
     [onRefetch]
   )
 
+  async function updateOurTeamSlot(slot: 1 | 2) {
+    if (match.our_team_slot === slot) return
+    try {
+      // Swap all players' team assignments (1↔2)
+      const swaps = matchPlayers.map((p) =>
+        supabase
+          .from("match_players")
+          .update({ team: p.team === 1 ? 2 : 1 })
+          .eq("id", p.id)
+      )
+      const results = await Promise.all(swaps)
+      const swapError = results.find((r) => r.error)?.error
+      if (swapError) throw swapError
+
+      const { error } = await supabase
+        .from("matches")
+        .update({ our_team_slot: slot })
+        .eq("id", match.id)
+      if (error) throw error
+      onRefetch()
+    } catch (err) {
+      toast.error("Failed to update team")
+      console.error(err)
+      onRefetch()
+    }
+  }
+
   const team1Players = matchPlayers.filter((p) => p.team === 1)
   const team2Players = matchPlayers.filter((p) => p.team === 2)
 
@@ -163,7 +192,15 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
               {match.dota_match_id && (
                 <div className="text-sm">
                   <span className="text-muted-foreground">Match ID:</span>{" "}
-                  <span className="font-mono">{match.dota_match_id}</span>
+                  <a
+                    href={`https://www.opendota.com/matches/${match.dota_match_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1 font-mono"
+                  >
+                    {match.dota_match_id}
+                    <ExternalLink className="size-3" />
+                  </a>
                 </div>
               )}
               {match.opendota_fetched && (
@@ -197,6 +234,36 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           </CardContent>
         )}
       </Card>
+
+      {match.our_team_slot && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Our team:</span>
+          <button
+            type="button"
+            onClick={() => updateOurTeamSlot(1)}
+            className={cn(
+              "px-3 py-1 text-sm rounded-md border transition-colors",
+              match.our_team_slot === 1
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border hover:bg-muted"
+            )}
+          >
+            Radiant
+          </button>
+          <button
+            type="button"
+            onClick={() => updateOurTeamSlot(2)}
+            className={cn(
+              "px-3 py-1 text-sm rounded-md border transition-colors",
+              match.our_team_slot === 2
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card border-border hover:bg-muted"
+            )}
+          >
+            Dire
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TeamPanel

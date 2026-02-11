@@ -105,13 +105,14 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
   useEffect(() => {
     if (!parsed || appUsers.size === 0) return
 
-    const updatedPlayers = parsed.players.map((p) => {
-      const isAppUser = appUsers.has(p.slot)
-      return { ...p, team: (isAppUser ? 1 : 2) as 1 | 2 }
-    })
+    let radiantCount = 0
+    let direCount = 0
+    for (const [slot] of appUsers) {
+      if (slot >= 1 && slot <= 5) radiantCount++
+      else if (slot >= 6 && slot <= 10) direCount++
+    }
 
-    setParsed({ ...parsed, players: updatedPlayers })
-    setOurTeamSlot(1)
+    setOurTeamSlot(direCount > radiantCount ? 2 : 1)
   }, [appUsers])
 
   async function handleConfirm() {
@@ -188,9 +189,43 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
               </div>
 
+              {hasAppUsers && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Our team:</span>
+                  <button
+                    type="button"
+                    onClick={() => setOurTeamSlot(1)}
+                    className={cn(
+                      "px-3 py-1 text-sm rounded-md border transition-colors",
+                      ourTeamSlot === 1
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border hover:bg-muted"
+                    )}
+                  >
+                    Radiant
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOurTeamSlot(2)}
+                    className={cn(
+                      "px-3 py-1 text-sm rounded-md border transition-colors",
+                      ourTeamSlot === 2
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border hover:bg-muted"
+                    )}
+                  >
+                    Dire
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <h3 className="font-medium text-sm">{hasAppUsers ? "Our Team" : "Team 1"}</h3>
+                  <h3 className="font-medium text-sm">
+                    {hasAppUsers
+                      ? ourTeamSlot === 1 ? "Radiant (Us)" : "Radiant"
+                      : "Team 1"}
+                  </h3>
                   <div className="space-y-1">
                     {team1Players.map((player) => {
                       const isAppUser = appUsers.has(player.slot)
@@ -217,7 +252,11 @@ export function NewGameDialog({ open, onOpenChange }: NewGameDialogProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <h3 className="font-medium text-sm">{hasAppUsers ? "Opponents" : "Team 2"}</h3>
+                  <h3 className="font-medium text-sm">
+                    {hasAppUsers
+                      ? ourTeamSlot === 2 ? "Dire (Us)" : "Dire"
+                      : "Team 2"}
+                  </h3>
                   <div className="space-y-1">
                     {team2Players.map((player) => {
                       const isAppUser = appUsers.has(player.slot)
