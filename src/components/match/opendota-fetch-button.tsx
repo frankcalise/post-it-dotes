@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
-import { fetchMatch } from "@/lib/opendota"
+import { fetchMatch, requestParse, pollParseJob } from "@/lib/opendota"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 
@@ -10,6 +10,8 @@ type OpenDotaFetchButtonProps = {
   alreadyFetched: boolean
   onFetched: () => void
 }
+
+type FetchStep = "idle" | "requesting_parse" | "polling" | "fetching_data"
 
 function odSlotToOurSlot(playerSlot: number): number {
   // OpenDota player_slot: 0-4 radiant, 128-132 dire
@@ -23,15 +25,41 @@ export function OpenDotaFetchButton({
   alreadyFetched,
   onFetched,
 }: OpenDotaFetchButtonProps) {
-  const [fetching, setFetching] = useState(false)
+  const [step, setStep] = useState<FetchStep>("idle")
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (step !== "polling") return
+    setElapsedSeconds(0)
+    const interval = setInterval(() => setElapsedSeconds((s) => s + 1), 1000)
+    return () => clearInterval(interval)
+  }, [step])
+
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   async function handleFetch() {
     if (!dotaMatchId) return
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
-      setFetching(true)
+      // Step 1: Request parse
+      setStep("requesting_parse")
+      const { job } = await requestParse(dotaMatchId)
+
+      // Step 2: Poll until parsed
+      setStep("polling")
+      await pollParseJob(job.jobId, controller.signal)
+
+      // Step 3: Fetch match data
+      setStep("fetching_data")
       const openDotaData = await fetchMatch(dotaMatchId)
 
+      // Step 4: Save & process (existing logic)
       const { error: updateError } = await supabase
         .from("matches")
         .update({
@@ -52,7 +80,6 @@ export function OpenDotaFetchButton({
 
       type MatchPlayerRow = NonNullable<typeof matchPlayers>[number]
 
-      // Build lowercase name → match_player lookup
       const nameMap = new Map<string, MatchPlayerRow>()
       for (const mp of matchPlayers) {
         if (mp.display_name) {
@@ -60,7 +87,6 @@ export function OpenDotaFetchButton({
         }
       }
 
-      // Build slot → match_player lookup for fallback
       const slotMap = new Map<number, MatchPlayerRow>()
       for (const mp of matchPlayers) {
         slotMap.set(mp.slot, mp)
@@ -117,23 +143,35 @@ export function OpenDotaFetchButton({
       toast.success(`Updated ${updatedCount}/${totalOdPlayers} players`)
       onFetched()
     } catch (error) {
-      console.error("Error fetching OpenDota data:", error)
-      toast.error("Failed to fetch OpenDota data")
+      if (error instanceof DOMException && error.name === "AbortError") {
+        toast.info("Parse cancelled")
+      } else {
+        console.error("Error fetching OpenDota data:", error)
+        toast.error(error instanceof Error ? error.message : "Failed to fetch OpenDota data")
+      }
     } finally {
-      setFetching(false)
+      setStep("idle")
+      abortRef.current = null
     }
   }
 
-  const label = fetching
-    ? "Fetching..."
-    : alreadyFetched
-      ? "Re-fetch"
-      : "Fetch from OpenDota"
+  const busy = step !== "idle"
+
+  const label =
+    step === "requesting_parse"
+      ? "Requesting parse..."
+      : step === "polling"
+        ? `Parsing replay... ${elapsedSeconds}s`
+        : step === "fetching_data"
+          ? "Fetching data..."
+          : alreadyFetched
+            ? "Re-fetch"
+            : "Fetch from OpenDota"
 
   return (
     <Button
       onClick={handleFetch}
-      disabled={!dotaMatchId || fetching}
+      disabled={!dotaMatchId || busy}
       size="sm"
       variant="outline"
     >
