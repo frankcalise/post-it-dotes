@@ -75,7 +75,14 @@ export function useMatch(id: string | undefined) {
               *,
               tag:tags (*)
             ),
-            notes (*)
+            notes (*),
+            match_history:match_players (
+              hero_id,
+              match:matches (
+                id,
+                created_at
+              )
+            )
           )
         `
         )

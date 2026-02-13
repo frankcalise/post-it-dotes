@@ -1,3 +1,4 @@
+import { useMemo } from "react"
 import { Link } from "react-router-dom"
 import { MessageSquare } from "lucide-react"
 import type { MatchPlayerWithDetails } from "@/lib/types"
@@ -5,11 +6,17 @@ import { cn } from "@/lib/utils"
 import { useHeroes } from "@/hooks/use-heroes"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip"
 
 type MatchPlayerRowProps = {
   matchPlayer: MatchPlayerWithDetails
   isSelected: boolean
   isAppUser: boolean
+  currentMatchId: string
   onSelect: () => void
   onOpenNotes?: () => void
 }
@@ -18,17 +25,37 @@ export function MatchPlayerRow({
   matchPlayer,
   isSelected,
   isAppUser,
+  currentMatchId,
   onSelect,
   onOpenNotes,
 }: MatchPlayerRowProps) {
   const { display_name, hero_id, kills, deaths, assists, player } = matchPlayer
-  const { getHeroName } = useHeroes()
+  const { getHeroName, getHeroIconUrl } = useHeroes()
   const hasKDA = kills !== null && deaths !== null && assists !== null
   const sortedNotes = player.notes
     ? [...player.notes].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       )
     : []
+
+  const { encounterCount, recentHeroes } = useMemo(() => {
+    const history = player.match_history ?? []
+    const otherMatches = history
+      .filter((mh) => mh.match.id !== currentMatchId)
+      .sort(
+        (a, b) =>
+          new Date(b.match.created_at).getTime() -
+          new Date(a.match.created_at).getTime()
+      )
+
+    return {
+      encounterCount: otherMatches.length,
+      recentHeroes: otherMatches
+        .filter((mh) => mh.hero_id !== null)
+        .slice(0, 3)
+        .map((mh) => mh.hero_id as number),
+    }
+  }, [player.match_history, currentMatchId])
 
   return (
     <Card
@@ -49,6 +76,40 @@ export function MatchPlayerRow({
             {display_name || "Unknown Player"}
           </Link>
           <div className="flex items-center gap-1.5">
+            {!isAppUser && recentHeroes.length > 0 && (
+              <div className="flex -space-x-1">
+                {recentHeroes.map((heroId, i) => {
+                  const iconUrl = getHeroIconUrl(heroId)
+                  const heroName = getHeroName(heroId)
+                  return iconUrl ? (
+                    <Tooltip key={`${heroId}-${i}`}>
+                      <TooltipTrigger asChild>
+                        <img
+                          src={iconUrl}
+                          alt={heroName}
+                          className="size-5 rounded-sm ring-1 ring-background"
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{heroName}</TooltipContent>
+                    </Tooltip>
+                  ) : null
+                })}
+              </div>
+            )}
+            {!isAppUser && encounterCount > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Badge variant="secondary" className="text-xs">
+                      x{encounterCount}
+                    </Badge>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Seen in {encounterCount} other match{encounterCount !== 1 ? "es" : ""}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {sortedNotes.length > 0 && (
               <button
                 onClick={(e) => {

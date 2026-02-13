@@ -273,6 +273,7 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
           appUserSlots={appUserSlots}
+          currentMatchId={match.id}
           onOpenNotes={(playerId, playerName) => {
             setNotesDialogPlayerId(playerId)
             setNotesDialogPlayerName(playerName)
@@ -285,6 +286,7 @@ export function MatchView({ match, matchPlayers, setMatchPlayers, onRefetch }: M
           selectedSlot={selectedSlot}
           onSelectSlot={setSelectedSlot}
           appUserSlots={appUserSlots}
+          currentMatchId={match.id}
           onOpenNotes={(playerId, playerName) => {
             setNotesDialogPlayerId(playerId)
             setNotesDialogPlayerName(playerName)

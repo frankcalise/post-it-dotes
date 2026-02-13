@@ -72,11 +72,17 @@ export type Note = {
   updated_at: string
 }
 
+export type MatchPlayerMatchHistory = {
+  hero_id: number | null
+  match: { id: string; created_at: string }
+}
+
 // Enriched types for UI
 export type MatchPlayerWithDetails = MatchPlayer & {
   player: Player & {
     tags: (PlayerTag & { tag: Tag })[]
     notes: Note[]
+    match_history?: MatchPlayerMatchHistory[]
   }
 }
 

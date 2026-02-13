@@ -67,5 +67,12 @@ export function useHeroes() {
     return hero?.localized_name || `Unknown Hero (${heroId})`
   }
 
-  return { heroes, getHeroName, loading, error }
+  function getHeroIconUrl(heroId: number): string | null {
+    const hero = heroes.find((h) => h.id === heroId)
+    if (!hero) return null
+    const shortName = hero.name.replace("npc_dota_hero_", "")
+    return `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/icons/${shortName}.png`
+  }
+
+  return { heroes, getHeroName, getHeroIconUrl, loading, error }
 }
